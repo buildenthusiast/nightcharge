@@ -22,9 +22,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1")
 }
 
-kotlin {
-    jvmToolchain(17)
-}
 
 compose.desktop {
     application {
