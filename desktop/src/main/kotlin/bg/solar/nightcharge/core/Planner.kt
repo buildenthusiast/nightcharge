@@ -10,15 +10,25 @@ import kotlin.math.min
 object Planner {
     val ZONE: ZoneId = ZoneId.of("Europe/Sofia")
 
-    const val BASE_PR = 0.85
+    /** Общи загуби без температурата: кабели, инвертор, замърсяване, разминаване на панелите. Температурата е отделно. */
+    const val BASE_PR = 0.92
     const val CHARGE_EFF = 0.95
     const val DISCHARGE_EFF = 0.95
     private const val LONG_DAYS = 30L
     private const val SHORT_DAYS = 3
     private const val MIN_MODEL_KWH = 1.0
 
-    /** Очаквано производство от дневната радиация върху панелите. */
-    fun modelKwh(irradianceKwhM2: Double, s: Settings): Double = s.pvKwp * irradianceKwhM2 * BASE_PR
+    /** Очаквано производство от дневната радиация върху един масив панели. */
+    fun modelKwh(irradianceKwhM2: Double, kwp: Double): Double = kwp * irradianceKwhM2 * BASE_PR
+
+    /**
+     * Загуба от температурата на клетките за един час: −0.35% на градус над 25 °C.
+     * Клетката е по-гореща от въздуха при силно слънце (около 3 °C на всеки 100 W/m²).
+     */
+    fun tempFactor(ambientC: Double, gtiWm2: Double): Double {
+        val cell = ambientC + 0.03 * gtiWm2
+        return (1.0 - 0.0035 * max(0.0, cell - 25.0)).coerceIn(0.8, 1.0)
+    }
 
     /**
      * Колко от модела реално дават панелите. Пропускат се дни, в които производството е
@@ -70,11 +80,13 @@ object Planner {
         today: LocalDate,
         currentSoc: Int,
         now: Long = System.currentTimeMillis(),
+        arrayRawKwh: List<Double> = emptyList(),
     ): Proposal {
         val tomorrow = today.plusDays(1)
-        val raw = model[tomorrow.toString()] ?: throw IllegalStateException("Няма прогноза за $tomorrow")
+        val raw = model[tomorrow.toString()] ?: throw IllegalStateException(pick("Няма прогноза за $tomorrow", "No forecast for $tomorrow"))
         val cal = calibration(history, model, today)
         val pv = raw * cal.factor
+        val arrayKwh = arrayRawKwh.map { it * cal.factor }
         val dayAfter = model[tomorrow.plusDays(1).toString()]?.let { it * cal.factor }
         val cons = expectedConsumption(history, tomorrow, s.defaultDailyConsKwh)
 
@@ -91,19 +103,45 @@ object Planner {
         val (ns, ne) = nightWindow(today, s)
 
         val sb = StringBuilder()
-        sb.append("Прогноза за $tomorrow: ${f1(pv)} kWh")
+        sb.append(pick("Прогноза за $tomorrow: ${f1(pv)} kWh", "Forecast for $tomorrow: ${f1(pv)} kWh"))
         if (cal.daysUsed > 0) {
-            sb.append(" (модел ${f1(raw)} kWh × ${pct(cal.factor)}; последните дни панелите дават ${pct(cal.shortTerm)} от модела, за месеца ${pct(cal.longTerm)})")
+            sb.append(
+                pick(
+                    " (модел ${f1(raw)} kWh × ${pct(cal.factor)}; последните дни панелите дават ${pct(cal.shortTerm)} от модела, за месеца ${pct(cal.longTerm)})",
+                    " (model ${f1(raw)} kWh × ${pct(cal.factor)}; recent days ${pct(cal.shortTerm)} of model, month ${pct(cal.longTerm)})",
+                ),
+            )
         } else {
-            sb.append(" (още няма история за корекция)")
+            sb.append(pick(" (още няма история за корекция)", " (no history for correction yet)"))
         }
-        sb.append(". Очаквана консумация ${f1(cons)} kWh, от тях ${f1(s.dayShare * cons)} kWh на дневна тарифа. ")
+        sb.append(
+            pick(
+                ". Очаквана консумация ${f1(cons)} kWh, от тях ${f1(s.dayShare * cons)} kWh на дневна тарифа. ",
+                ". Expected consumption ${f1(cons)} kWh, of which ${f1(s.dayShare * cons)} kWh on the day tariff. ",
+            ),
+        )
         when {
-            !economical -> sb.append("Нощната цена не е достатъчно по-ниска от дневната, за да си струва зареждането.")
-            charge -> sb.append("Недостиг ~${f1(deficit)} kWh → зареждане до $target% между ${hh(ns)} и ${hh(ne)} (до ~${f1(gridKwh)} kWh от мрежата, спестява ~${f2(saving)} €).")
-            else -> sb.append("Слънцето покрива деня, зареждане от мрежата не е нужно.")
+            !economical -> sb.append(
+                pick(
+                    "Нощната цена не е достатъчно по-ниска от дневната, за да си струва зареждането.",
+                    "The night price is not low enough compared with the day price to make charging worth it.",
+                ),
+            )
+            charge -> sb.append(
+                pick(
+                    "Недостиг ~${f1(deficit)} kWh → зареждане до $target% между ${hh(ns)} и ${hh(ne)} (до ~${f1(gridKwh)} kWh от мрежата, спестява ~${f2(saving)} €).",
+                    "Shortfall ~${f1(deficit)} kWh → charge to $target% between ${hh(ns)} and ${hh(ne)} (up to ~${f1(gridKwh)} kWh from the grid, saves ~${f2(saving)} €).",
+                ),
+            )
+            else -> sb.append(pick("Слънцето покрива деня, зареждане от мрежата не е нужно.", "Solar covers the day, no grid charging needed."))
         }
-        if (dayAfter != null) sb.append(" Вдругиден: ~${f1(dayAfter)} kWh.")
+        if (dayAfter != null) sb.append(pick(" Вдругиден: ~${f1(dayAfter)} kWh.", " Day after: ~${f1(dayAfter)} kWh."))
+        if (arrayKwh.size > 1 && arrayKwh.size == s.arrays.size) {
+            val parts = s.arrays.zip(arrayKwh).joinToString("; ") { (arr, kwh) ->
+                "${arr.facing.label} ${f1(arr.kwp)} kWp, ${arr.tiltDeg}°: ${f1(kwh)} kWh"
+            }
+            sb.append(pick(" По панели: $parts.", " Per array: $parts."))
+        }
 
         return Proposal(
             forDate = tomorrow.toString(),
@@ -122,6 +160,7 @@ object Planner {
             nightStart = ns,
             nightEnd = ne,
             reason = sb.toString(),
+            arrayKwh = arrayKwh,
         )
     }
 

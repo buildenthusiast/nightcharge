@@ -6,10 +6,25 @@ enum class Erp(val label: String) {
     ENERGO_PRO("Енерго-Про / ЕРП Север"),
 }
 
-data class Settings(
-    val pvKwp: Double = 8.7,
+/** Посока на панелите. Азимутът е спрямо юг: 0 = юг, -90 = изток, 90 = запад. */
+enum class Facing(private val bgLabel: String, private val enLabel: String, val azimuthDeg: Int) {
+    EAST("Изток", "East", -90),
+    SOUTH("Юг", "South", 0),
+    WEST("Запад", "West", 90);
+
+    val label: String get() = pick(bgLabel, enLabel)
+}
+
+/** Един масив панели със собствена мощност, наклон и посока. */
+data class PvArray(
+    val kwp: Double = 8.7,
     val tiltDeg: Int = 17,
-    val azimuthDeg: Int = 0,
+    val facing: Facing = Facing.SOUTH,
+)
+
+data class Settings(
+    /** От 1 до 3 масива; прогнозата се смята за всеки поотделно и се сумира. */
+    val arrays: List<PvArray> = listOf(PvArray()),
     val lat: Double = 42.2167,
     val lon: Double = 24.6333,
     val batteryKwh: Double = 25.6,
@@ -30,17 +45,32 @@ data class Settings(
     val decisionMinute: Int = 0,
     /** Номинална мощност на инвертора; 0 = още не е открита. */
     val inverterRatedW: Int = 0,
+    /** false = питай с известие (Одобри / Откажи); true = записва сам в инвертора. */
+    val autoApply: Boolean = false,
 ) {
+    /** Общата мощност на всички панели. */
+    val pvKwp: Double get() = arrays.sumOf { it.kwp }
+
     /** Мощността, която се записва в дневните слотове и е таван за зареждането. */
     val ratedPowerW: Int get() = if (inverterRatedW > 0) inverterRatedW else DEFAULT_RATED_W
 
     companion object {
         /** Предишното твърдо зададено поведение (SUN-15K), докато мощността не е открита. */
         const val DEFAULT_RATED_W = 15000
+        const val MAX_ARRAYS = 3
     }
 }
 
-data class DayRecord(val date: String, val pvKwh: Double, val consKwh: Double)
+/** Дневните kWh както в Deye Cloud: производство, консумация, покупка от мрежата, зареждане, разреждане и подаване. */
+data class DayRecord(
+    val date: String,
+    val pvKwh: Double,
+    val consKwh: Double,
+    val purchasedKwh: Double = 0.0,
+    val chargeKwh: Double = 0.0,
+    val dischargeKwh: Double = 0.0,
+    val feedInKwh: Double = 0.0,
+)
 
 data class Calibration(val longTerm: Double, val shortTerm: Double, val factor: Double, val daysUsed: Int)
 
@@ -63,6 +93,8 @@ data class Proposal(
     val nightStart: Int,
     val nightEnd: Int,
     val reason: String,
+    /** Прогнозата за деня по масиви (kWh, след корекцията), в реда на настройките. */
+    val arrayKwh: List<Double> = emptyList(),
     val status: String = STATUS_PENDING,
 ) {
     companion object {

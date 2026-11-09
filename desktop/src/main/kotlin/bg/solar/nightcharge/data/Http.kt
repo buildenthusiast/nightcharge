@@ -6,7 +6,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object Http {
-    fun get(url: String): JSONObject = request("GET", url, null, emptyMap())
+    fun get(url: String, headers: Map<String, String> = emptyMap()): JSONObject = request("GET", url, null, headers)
 
     fun post(url: String, body: JSONObject, headers: Map<String, String> = emptyMap()): JSONObject =
         request("POST", url, body, headers)
