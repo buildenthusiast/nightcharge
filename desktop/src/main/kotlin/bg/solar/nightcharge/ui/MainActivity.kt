@@ -1,15 +1,5 @@
 package bg.solar.nightcharge.ui
 
-import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.location.LocationManager
-import android.os.Build
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -57,8 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -81,7 +69,6 @@ import bg.solar.nightcharge.core.pick
 import bg.solar.nightcharge.inverter.Brand
 import bg.solar.nightcharge.inverter.Capability
 import bg.solar.nightcharge.inverter.Live
-import bg.solar.nightcharge.work.Scheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -95,29 +82,9 @@ import kotlin.math.roundToInt
 /** Живите данни се обновяват на всяка минута. */
 private const val LIVE_REFRESH_MS = 60_000L
 
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val engine = Engine(this)
-        Scheduler.schedule(this, engine.store.settings(), replace = false)
-        bg.solar.nightcharge.work.SocWatch.schedule(this)
-        AppPrefs.language = engine.store.appPref("lang", "auto")
-        AppPrefs.theme = engine.store.appPref("theme", "auto")
-        setContent {
-            SolarTheme(AppPrefs.theme) {
-                Surface(Modifier.fillMaxSize().safeDrawingPadding(), color = MaterialTheme.colorScheme.background) { App(engine) }
-            }
-        }
-    }
-}
-
 @Composable
 fun App(engine: Engine) {
     var tab by remember { mutableIntStateOf(0) }
-    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-    }
     Column(Modifier.fillMaxSize()) {
         Header()
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -159,7 +126,6 @@ fun App(engine: Engine) {
 
 @Composable
 private fun Header() {
-    val uri = LocalUriHandler.current
     Column(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
@@ -174,7 +140,7 @@ private fun Header() {
             pick("Направено от Build Enthusiast · YouTube", "Made by Build Enthusiast · YouTube"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.clickable { uri.openUri("https://www.youtube.com/@buildenthusiast") },
+            modifier = Modifier.clickable { openUri("https://www.youtube.com/@buildenthusiast") },
         )
     }
 }
@@ -627,7 +593,6 @@ private fun CollapsibleSection(title: String, startOpen: Boolean = false, conten
 
 @Composable
 private fun SettingsScreen(engine: Engine) {
-    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var s by remember { mutableStateOf(engine.store.settings()) }
     // Избраната в падащото меню марка. Записва се едва при „Запази“.
@@ -664,7 +629,6 @@ private fun SettingsScreen(engine: Engine) {
         engine.saveBrand(brand, fields.toMap())
         // Скритите полета се изчистват след запис, за да не останат в полето.
         brand.form.filter { it.masked }.forEach { fields[it.key] = "" }
-        Scheduler.schedule(ctx, s, replace = true)
     }
 
     /** Мрежова операция, след която настройките се презареждат, защото може да ги е обновила. */
@@ -687,18 +651,6 @@ private fun SettingsScreen(engine: Engine) {
     /** Променя един от масивите панели по индекс. */
     fun setArray(i: Int, change: (PvArray) -> PvArray) {
         s = s.copy(arrays = s.arrays.mapIndexed { j, a -> if (j == i) change(a) else a })
-    }
-
-    val location = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val loc = if (granted) lastLocation(ctx) else null
-        if (loc != null) {
-            lat = String.format(Locale.US, "%.4f", loc.first)
-            lon = String.format(Locale.US, "%.4f", loc.second)
-            s = s.copy(lat = loc.first, lon = loc.second, erp = Tariffs.erpFor(loc.first, loc.second))
-            message = pick("Локацията е взета от телефона. Провери ЕРП-то по-долу.", "Location taken from the phone. Check the utility below.")
-        } else {
-            message = pick("Няма достъпна локация от телефона.", "No location available from the phone.")
-        }
     }
 
     ConfirmRestoreDialog(confirmRestore, onDismiss = { confirmRestore = false }) {
@@ -728,7 +680,6 @@ private fun SettingsScreen(engine: Engine) {
                         RadioButton(selected = AppPrefs.language == value, onClick = {
                             engine.store.setAppPref("lang", value)
                             AppPrefs.language = value
-                            (ctx as? Activity)?.recreate()
                         })
                         Text(label)
                     }
@@ -739,7 +690,6 @@ private fun SettingsScreen(engine: Engine) {
                         RadioButton(selected = AppPrefs.theme == value, onClick = {
                             engine.store.setAppPref("theme", value)
                             AppPrefs.theme = value
-                            (ctx as? Activity)?.recreate()
                         })
                         Text(label)
                     }
@@ -867,9 +817,6 @@ private fun SettingsScreen(engine: Engine) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Field(pick("Ширина", "Latitude"), lat, Modifier.weight(1f), number = true) { lat = it }
                     Field(pick("Дължина", "Longitude"), lon, Modifier.weight(1f), number = true) { lon = it }
-                }
-                OutlinedButton(onClick = { location.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }) {
-                    Text(pick("Вземи от GPS", "Use GPS"))
                 }
                 Erp.entries.forEach { erp ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1102,15 +1049,6 @@ private fun resizeArrays(list: List<PvArray>, n: Int): List<PvArray> {
     if (n <= list.size) return list.take(n)
     val extra = (list.size until n).map { i -> PvArray(kwp = 4.0, tiltDeg = 17, facing = Facing.entries[i % Facing.entries.size]) }
     return list + extra
-}
-
-private fun lastLocation(ctx: Context): Pair<Double, Double>? {
-    val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    return try {
-        lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time }?.let { it.latitude to it.longitude }
-    } catch (e: SecurityException) {
-        null
-    }
 }
 
 @Composable

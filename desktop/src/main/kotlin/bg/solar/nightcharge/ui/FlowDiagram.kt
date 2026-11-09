@@ -1,6 +1,6 @@
 package bg.solar.nightcharge.ui
 
-import android.graphics.Paint
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -187,16 +187,8 @@ fun FlowDiagram(d: Live?) {
             style = Stroke(2.dp.toPx()),
         )
         drawGlyph(Glyph.INVERTER, center, centerSize * 0.55f, centerColor, soc)
-
-        val paint = Paint().apply {
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-        }
         val canvas = drawContext.canvas.nativeCanvas
-        paint.isFakeBoldText = true
-        paint.textSize = 11.sp.toPx()
-        paint.color = centerColor.toArgb()
-        canvas.drawText(inverterLabel, center.x, center.y + centerSize / 2 + 14.dp.toPx(), paint)
+        canvas.centeredText(inverterLabel, center.x, center.y + centerSize / 2 + 14.dp.toPx(), 11.sp.toPx(), centerColor.toArgb())
 
         nodes.forEach { n ->
             val p = pos(n.fx, n.fy)
@@ -215,20 +207,11 @@ fun FlowDiagram(d: Live?) {
                 style = Stroke(1.dp.toPx()),
             )
             drawGlyph(n.glyph, p, card * 0.55f, n.color, if (n.glyph == Glyph.BATTERY) soc else 0f)
-
-            paint.isFakeBoldText = true
-            paint.textSize = 12.sp.toPx()
-            paint.color = textColor.toArgb()
-            canvas.drawText(n.value, p.x, p.y + card / 2 + 16.dp.toPx(), paint)
-
-            paint.isFakeBoldText = false
-            paint.textSize = 10.sp.toPx()
-            paint.color = mutedColor.toArgb()
-            canvas.drawText(n.title, p.x, p.y + card / 2 + 30.dp.toPx(), paint)
+            canvas.centeredText(n.value, p.x, p.y + card / 2 + 16.dp.toPx(), 12.sp.toPx(), textColor.toArgb())
+            canvas.centeredText(n.title, p.x, p.y + card / 2 + 30.dp.toPx(), 10.sp.toPx(), mutedColor.toArgb())
 
             n.status?.let {
-                paint.color = DeyeGreen.toArgb()
-                canvas.drawText(it, p.x, p.y + card / 2 + 42.dp.toPx(), paint)
+                canvas.centeredText(it, p.x, p.y + card / 2 + 42.dp.toPx(), 10.sp.toPx(), DeyeGreen.toArgb())
             }
         }
     }

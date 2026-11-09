@@ -1,6 +1,6 @@
 package bg.solar.nightcharge.ui
 
-import android.graphics.Paint
+import org.jetbrains.skia.Canvas as SkiaCanvas
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -250,17 +250,10 @@ fun EnergyBars(points: List<BarPoint>, hidden: Set<String>, onToggle: (String) -
         }
 
         drawLine(Color.Gray.copy(alpha = 0.6f), Offset(0f, zeroY), Offset(size.width, zeroY), strokeWidth = 1.dp.toPx())
-
-        val paint = Paint().apply {
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-            textSize = 10.sp.toPx()
-            color = labelColor
-        }
         val step = ceil(n / 8.0).toInt().coerceAtLeast(1)
         val canvas = drawContext.canvas.nativeCanvas
         points.forEachIndexed { i, p ->
-            if (i % step == 0) canvas.drawText(p.label, i * slot + slot / 2, size.height - 4.dp.toPx(), paint)
+            if (i % step == 0) canvas.centeredText(p.label, i * slot + slot / 2, size.height - 4.dp.toPx(), 10.sp.toPx(), labelColor)
         }
     }
 
@@ -378,13 +371,6 @@ private fun ForecastBars(points: List<ForecastBar>, onShift: (Long) -> Unit) {
         if (selected in 0 until n) {
             drawRect(Color.Gray.copy(alpha = 0.15f), topLeft = Offset(selected * slot, 0f), size = Size(slot, plotH))
         }
-
-        val valuePaint = Paint().apply {
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-            textSize = 9.sp.toPx()
-            color = labelColor
-        }
         val canvas = drawContext.canvas.nativeCanvas
 
         points.forEachIndexed { i, p ->
@@ -394,22 +380,15 @@ private fun ForecastBars(points: List<ForecastBar>, onShift: (Long) -> Unit) {
             drawRect(DeyeBlue, topLeft = Offset(x, plotH - fH), size = Size(barW, fH))
             drawRect(SeriesProduction, topLeft = Offset(x + barW, plotH - aH), size = Size(barW, aH))
             if (showValues) {
-                canvas.drawText(String.format(Locale.US, digits, p.forecast), x + barW / 2, plotH - fH - 3.dp.toPx(), valuePaint)
-                canvas.drawText(String.format(Locale.US, digits, p.actual), x + barW + barW / 2, plotH - aH - 3.dp.toPx(), valuePaint)
+                canvas.centeredText(String.format(Locale.US, digits, p.forecast), x + barW / 2, plotH - fH - 3.dp.toPx(), 9.sp.toPx(), labelColor)
+                canvas.centeredText(String.format(Locale.US, digits, p.actual), x + barW + barW / 2, plotH - aH - 3.dp.toPx(), 9.sp.toPx(), labelColor)
             }
         }
 
         drawLine(Color.Gray.copy(alpha = 0.6f), Offset(0f, plotH), Offset(size.width, plotH), strokeWidth = 1.dp.toPx())
-
-        val paint = Paint().apply {
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-            textSize = 10.sp.toPx()
-            color = labelColor
-        }
         val step = ceil(n / 8.0).toInt().coerceAtLeast(1)
         points.forEachIndexed { i, p ->
-            if (i % step == 0) canvas.drawText(p.label, i * slot + slot / 2, size.height - 4.dp.toPx(), paint)
+            if (i % step == 0) canvas.centeredText(p.label, i * slot + slot / 2, size.height - 4.dp.toPx(), 10.sp.toPx(), labelColor)
         }
     }
 
@@ -565,16 +544,9 @@ private fun ProfileChart(hours: List<HourPoint>, hidden: Set<String>, expected: 
                 style = Stroke(width = 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))),
             )
         }
-
-        val paint = Paint().apply {
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-            textSize = 10.sp.toPx()
-            color = labelColor
-        }
         val canvas = drawContext.canvas.nativeCanvas
         for (h in 0 until 24 step 3) {
-            canvas.drawText(String.format(Locale.US, "%02d", h), h * slot + slot / 2, size.height - 4.dp.toPx(), paint)
+            canvas.centeredText(String.format(Locale.US, "%02d", h), h * slot + slot / 2, size.height - 4.dp.toPx(), 10.sp.toPx(), labelColor)
         }
     }
 

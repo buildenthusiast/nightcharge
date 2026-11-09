@@ -1,10 +1,5 @@
 package bg.solar.nightcharge.ui
 
-import android.content.Intent
-import android.os.Handler
-import android.os.Looper
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +25,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import bg.solar.nightcharge.Engine
@@ -942,7 +936,6 @@ private fun faq(): List<Pair<String, String>> = listOf(
 
 @Composable
 fun HelpScreen(engine: Engine) {
-    val ctx = LocalContext.current
     val brand = engine.brand()
     val voice = rememberVoice()
     var helped by remember { mutableStateOf<Boolean?>(null) }
@@ -1059,11 +1052,8 @@ fun HelpScreen(engine: Engine) {
                             val text = pick("Марка: ", "Brand: ") + brand.label + "\n" +
                                 pick("Код на грешката: ", "Error code: ") + trCode(picked.code) + "\n" +
                                 pick("Модел и сериен номер: ", "Model and serial number: ")
-                            val send = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, text)
-                            }
-                            ctx.startActivity(Intent.createChooser(send, pick("Изпрати на сервиза", "Send to service")))
+                            java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                                .setContents(java.awt.datatransfer.StringSelection(text), null)
                         }) { Text(pick("Подготви съобщение за сервиза", "Prepare a message for service")) }
                         null -> Unit
                     }
@@ -1085,7 +1075,6 @@ fun HelpScreen(engine: Engine) {
 
 /** Състоянието на четенето: кои гласове има телефонът, дали се чете в момента и какво да се покаже. */
 private class VoiceState {
-    var tts: TextToSpeech? = null
     var hasBulgarian by mutableStateOf(false)
     var hasEnglish by mutableStateOf(false)
     var speaking by mutableStateOf(false)
@@ -1098,40 +1087,9 @@ private fun missingVoiceText(): String = pick(
     "The phone has no English voice. Install it: in phone settings open “Text-to-speech”, choose Google Text-to-speech, tap the gear icon, then “Install voice data” and choose English.",
 )
 
-/** Четене на глас през Android TextToSpeech: на езика на приложението, български (bg-BG) или английски. */
+/** На компютъра няма синтезатор на реч в приложението, затова четенето е изключено. */
 @Composable
-private fun rememberVoice(): VoiceState {
-    val ctx = LocalContext.current
-    val state = remember { VoiceState() }
-    DisposableEffect(ctx) {
-        val main = Handler(Looper.getMainLooper())
-        val tts = TextToSpeech(ctx) { status ->
-            val engine = state.tts
-            if (status == TextToSpeech.SUCCESS && engine != null) {
-                state.hasBulgarian = engine.isLanguageAvailable(Locale("bg", "BG")) >= TextToSpeech.LANG_AVAILABLE
-                state.hasEnglish = engine.isLanguageAvailable(Locale.US) >= TextToSpeech.LANG_AVAILABLE
-            } else {
-                state.message = pick("Телефонът няма работещ синтезатор на реч.", "The phone has no working speech engine.")
-            }
-        }
-        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) = Unit
-            override fun onDone(utteranceId: String?) {
-                main.post { state.speaking = false }
-            }
-            @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) {
-                main.post { state.speaking = false }
-            }
-        })
-        state.tts = tts
-        onDispose {
-            tts.shutdown()
-            state.tts = null
-        }
-    }
-    return state
-}
+private fun rememberVoice(): VoiceState = remember { VoiceState() }
 
 /** Чете текста на езика на приложението. Ако за този език няма глас, показва как да се инсталира. */
 private fun VoiceState.say(text: String) {
@@ -1141,12 +1099,10 @@ private fun VoiceState.say(text: String) {
         return
     }
     message = ""
-    tts?.setLanguage(if (bg) Locale("bg", "BG") else Locale.US)
-    speaking = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "help") == TextToSpeech.SUCCESS
+    speaking = false
 }
 
 private fun VoiceState.stop() {
-    tts?.stop()
     speaking = false
 }
 

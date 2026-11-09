@@ -1,9 +1,5 @@
 package bg.solar.nightcharge
 
-import android.content.ContentValues
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import bg.solar.nightcharge.core.DayRecord
 import bg.solar.nightcharge.core.Planner
 import bg.solar.nightcharge.core.Proposal
@@ -23,7 +19,6 @@ import bg.solar.nightcharge.inverter.HourPoint
 import bg.solar.nightcharge.inverter.Inverter
 import bg.solar.nightcharge.inverter.InverterProvider
 import bg.solar.nightcharge.inverter.Live
-import bg.solar.nightcharge.ui.SolarWidget
 import java.io.File
 import java.io.IOException
 import java.time.LocalDate
@@ -105,7 +100,6 @@ class Engine(file: java.io.File? = null) {
         ready()
         val l = api.live()
         store.saveLastLive(l.soc, l.pvW)
-        SolarWidget.update(appCtx)
         return l
     }
 
@@ -240,30 +234,10 @@ class Engine(file: java.io.File? = null) {
      */
     fun backupToDownloads(): String {
         val csv = exportCsv().toByteArray(Charsets.UTF_8)
-        val name = "solar-enthusiast-history.csv"
-        val done = pick("Историята е записана в Изтегляния/SolarEnthusiast.", "History saved to Downloads/SolarEnthusiast.")
-        if (Build.VERSION.SDK_INT >= 29) {
-            val resolver = appCtx.contentResolver
-            val relative = "${Environment.DIRECTORY_DOWNLOADS}/SolarEnthusiast/"
-            val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            // Старият файл се трие, за да няма дубликати.
-            resolver.delete(
-                collection,
-                "${MediaStore.Downloads.DISPLAY_NAME} = ? AND ${MediaStore.Downloads.RELATIVE_PATH} = ?",
-                arrayOf(name, relative),
-            )
-            val values = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, name)
-                put(MediaStore.Downloads.MIME_TYPE, "text/csv")
-                put(MediaStore.Downloads.RELATIVE_PATH, relative)
-            }
-            val uri = resolver.insert(collection, values) ?: throw IOException("MediaStore")
-            resolver.openOutputStream(uri)?.use { it.write(csv) }
-        } else {
-            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "SolarEnthusiast")
-            dir.mkdirs()
-            File(dir, name).writeBytes(csv)
-        }
+        val done = pick("Историята е записана в Документи/SolarEnthusiast.", "History saved to Documents/SolarEnthusiast.")
+        val dir = File(System.getProperty("user.home"), "Documents/SolarEnthusiast")
+        dir.mkdirs()
+        File(dir, "solar-enthusiast-history.csv").writeBytes(csv)
         return done
     }
 
