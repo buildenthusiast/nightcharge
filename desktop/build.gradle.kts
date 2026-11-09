@@ -38,6 +38,8 @@ compose.desktop {
     application {
         mainClass = "bg.solar.nightcharge.MainKt"
         nativeDistributions {
+            // Вграденият JVM трябва да има всички модули, иначе програмата не стартира.
+            includeAllModules = true
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "NightCharge"
             packageVersion = "1.0.0"
