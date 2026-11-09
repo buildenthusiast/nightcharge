@@ -43,7 +43,7 @@ compose.desktop {
             packageVersion = "1.0.0"
             windows {
                 menuGroup = "NightCharge"
-                upgradeUuid = "6f1c2a9e-3b7d-4e1f-9a2b-nightcharge01"
+                upgradeUuid = "d196b9c1-4143-4b9c-9979-e9b657865056"
             }
         }
     }
